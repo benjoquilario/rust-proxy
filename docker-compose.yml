@@ -6,7 +6,7 @@ services:
     ports:
       - '8080:8080'
     environment:
-      - ENABLE_CORS=true
+      - ENABLE_CORS=false
     networks:
       - proxy-network
     healthcheck:
