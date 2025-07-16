@@ -1,6 +1,6 @@
 services:
   rust-proxy:
-    image: ghcr.io/benjoquilario/rust-proxy:latest
+    image: ghcr.io/benjoquilario/rustproxy:latest
     container_name: rust-proxy
     restart: unless-stopped
     ports:
