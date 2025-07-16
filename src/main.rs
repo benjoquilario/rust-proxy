@@ -16,10 +16,12 @@ use tokio::task;
 mod templates;
 
 // Allowed origins
-static ALLOWED_ORIGINS: Lazy<[&str; 3]> = Lazy::new(|| [
+static ALLOWED_ORIGINS: Lazy<[&str; 5]> = Lazy::new(|| [
     "http://localhost:5173",
     "http://localhost:3000",
-    "http://aniwave.at",
+    "http://127.0.0.1:8080",
+    "https://animehi.live",
+    "https://cors.animehi.live",
 ]);
 
 // Reqwest client pool
