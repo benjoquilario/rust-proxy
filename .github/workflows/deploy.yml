@@ -1,101 +1,101 @@
-name: Deploy to Digital Ocean
+# name: Deploy to Digital Ocean
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+# on:
+#   push:
+#     branches: [main]
+#   pull_request:
+#     branches: [main]
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+# env:
+#   REGISTRY: ghcr.io
+#   IMAGE_NAME: ${{ github.repository }}
 
-jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+# jobs:
+#   build-and-push:
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: read
+#       packages: write
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v3
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+#       - name: Log in to GHCR
+#         uses: docker/login-action@v3
+#         with:
+#           registry: ghcr.io
+#           username: ${{ github.actor }}
+#           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/rustproxy:latest
+#       - name: Build and push Docker image
+#         uses: docker/build-push-action@v5
+#         with:
+#           context: .
+#           push: true
+#           tags: ghcr.io/${{ github.repository_owner }}/rustproxy:latest
 
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+#   deploy:
+#     needs: build-and-push
+#     runs-on: ubuntu-latest
+#     if: github.ref == 'refs/heads/main'
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
 
-      - name: Deploy to Digital Ocean Droplet
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DROPLET_HOST }}
-          username: ${{ secrets.DROPLET_USER }}
-          key: ${{ secrets.DROPLET_SSH_KEY }}
-          script: |
-            # Create application directory if it doesn't exist
-            sudo mkdir -p /opt/rust-proxy
-            sudo chown $USER:$USER /opt/rust-proxy
+#       - name: Deploy to Digital Ocean Droplet
+#         uses: appleboy/ssh-action@v1.0.3
+#         with:
+#           host: ${{ secrets.DROPLET_HOST }}
+#           username: ${{ secrets.DROPLET_USER }}
+#           key: ${{ secrets.DROPLET_SSH_KEY }}
+#           script: |
+#             # Create application directory if it doesn't exist
+#             sudo mkdir -p /opt/rust-proxy
+#             sudo chown $USER:$USER /opt/rust-proxy
 
-            # Clone or update repository
-            if [ -d "/opt/rust-proxy/.git" ]; then
-              echo "Repository exists, pulling latest changes..."
-              cd /opt/rust-proxy
-              git pull origin main
-            else
-              echo "Cloning repository..."
-              git clone https://github.com/benjoquilario/rust-proxy.git /opt/rust-proxy
-              cd /opt/rust-proxy
-            fi
+#             # Clone or update repository
+#             if [ -d "/opt/rust-proxy/.git" ]; then
+#               echo "Repository exists, pulling latest changes..."
+#               cd /opt/rust-proxy
+#               git pull origin main
+#             else
+#               echo "Cloning repository..."
+#               git clone https://github.com/benjoquilario/rust-proxy.git /opt/rust-proxy
+#               cd /opt/rust-proxy
+#             fi
 
-            # Login to GitHub Container Registry
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+#             # Login to GitHub Container Registry
+#             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Pull the latest image (using the correct image name)
-            docker pull ghcr.io/benjoquilario/rustproxy:latest
+#             # Pull the latest image (using the correct image name)
+#             docker pull ghcr.io/benjoquilario/rustproxy:latest
 
-            # Update docker-compose.yml to use the correct image name
-            sed -i 's|ghcr.io/benjoquilario/rust-proxy:latest|ghcr.io/benjoquilario/rustproxy:latest|g' docker-compose.yml
+#             # Update docker-compose.yml to use the correct image name
+#             sed -i 's|ghcr.io/benjoquilario/rust-proxy:latest|ghcr.io/benjoquilario/rustproxy:latest|g' docker-compose.yml
 
-            # Stop and remove only rust-proxy container (won't affect other containers)
-            docker-compose stop rust-proxy 2>/dev/null || true
-            docker-compose rm -f rust-proxy 2>/dev/null || true
+#             # Stop and remove only rust-proxy container (won't affect other containers)
+#             docker-compose stop rust-proxy 2>/dev/null || true
+#             docker-compose rm -f rust-proxy 2>/dev/null || true
 
-            # Start only the rust-proxy container
-            docker-compose up -d rust-proxy
+#             # Start only the rust-proxy container
+#             docker-compose up -d rust-proxy
 
-            # Wait for container to be ready
-            sleep 10
+#             # Wait for container to be ready
+#             sleep 10
 
-            # Check if container is running
-            if docker-compose ps rust-proxy | grep -q "Up"; then
-              echo "✅ rust-proxy container is running successfully!"
-            else
-              echo "❌ rust-proxy container failed to start"
-              docker-compose logs rust-proxy
-              exit 1
-            fi
+#             # Check if container is running
+#             if docker-compose ps rust-proxy | grep -q "Up"; then
+#               echo "✅ rust-proxy container is running successfully!"
+#             else
+#               echo "❌ rust-proxy container failed to start"
+#               docker-compose logs rust-proxy
+#               exit 1
+#             fi
 
-            # Clean up old images
-            docker image prune -f
+#             # Clean up old images
+#             docker image prune -f
 
-            echo "🎉 Deployment completed successfully!"
-            echo "Service available at: http://$(hostname -I | awk '{print $1}'):8080"
+#             echo "🎉 Deployment completed successfully!"
+#             echo "Service available at: http://$(hostname -I | awk '{print $1}'):8080"

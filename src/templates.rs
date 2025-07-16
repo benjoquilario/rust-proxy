@@ -1,18 +1,14 @@
-use once_cell::sync::Lazy;
 use regex::Regex;
+use once_cell::sync::Lazy;
+use url::Url;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::collections::HashMap;
 use std::str::FromStr;
-use url::Url;
 
 // Define default headers used by most templates
 static DEFAULT_HEADERS: Lazy<HashMap<String, String>> = Lazy::new(|| {
     HashMap::from([
-        (
-            "user-agent".to_string(),
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:137.0) Gecko/20100101 Firefox/137.0"
-                .to_string(),
-        ),
+        ("user-agent".to_string(), "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:137.0) Gecko/20100101 Firefox/137.0".to_string()),
         ("accept".to_string(), "*/*".to_string()),
         ("accept-language".to_string(), "en-US,en;q=0.5".to_string()),
         ("sec-fetch-dest".to_string(), "empty".to_string()),
@@ -33,7 +29,10 @@ struct DomainGroup {
 static DOMAIN_GROUPS: Lazy<Vec<DomainGroup>> = Lazy::new(|| {
     vec![
         DomainGroup {
-            patterns: vec![r"(?i)\.padorupado\.ru$", r"(?i)\.kwikie\.ru$"],
+            patterns: vec![
+                r"(?i)\.padorupado\.ru$",
+                r"(?i)\.kwikie\.ru$",
+            ],
             origin: "https://kwik.si",
             referer: "https://kwik.si/",
             sec_fetch_site: "cross-site",
@@ -97,32 +96,14 @@ static DOMAIN_GROUPS: Lazy<Vec<DomainGroup>> = Lazy::new(|| {
             use_cache_headers: false,
         },
         DomainGroup {
-            patterns: vec![
-                r"(?i)\.raffaellocdn\.net$",
-                r"(?i)\.feetcdn\.com$",
-                r"(?i)clearskydrift45\.site$",
-            ],
+            patterns: vec![r"(?i)\.raffaellocdn\.net$", r"(?i)\.feetcdn\.com$", r"(?i)clearskydrift45\.site$"],
             origin: "https://kerolaunochan.online",
             referer: "https://kerolaunochan.online/",
             sec_fetch_site: "cross-site",
             use_cache_headers: false,
         },
         DomainGroup {
-            patterns: vec![
-                r"(?i)dewbreeze84\.online$",
-                r"(?i)cloudydrift38\.site$",
-                r"(?i)sunshinerays93\.live$",
-                r"(?i)clearbluesky72\.wiki$",
-                r"(?i)breezygale56\.online$",
-                r"(?i)frostbite27\.pro$",
-                r"(?i)frostywinds57\.live$",
-                r"(?i)icyhailstorm64\.wiki$",
-                r"(?i)icyhailstorm29\.online$",
-                r"(?i)windflash93\.xyz$",
-                r"(?i)stormdrift27\.site$",
-                r"(?i)tempestcloud61\.wiki$",
-                r"(?i)sunburst66\.pro$",
-            ],
+            patterns: vec![r"(?i)dewbreeze84\.online$", r"(?i)cloudydrift38\.site$", r"(?i)sunshinerays93\.live$", r"(?i)clearbluesky72\.wiki$", r"(?i)breezygale56\.online$", r"(?i)frostbite27\.pro$", r"(?i)frostywinds57\.live$", r"(?i)icyhailstorm64\.wiki$", r"(?i)icyhailstorm29\.online$", r"(?i)windflash93\.xyz$", r"(?i)stormdrift27\.site$", r"(?i)tempestcloud61\.wiki$", r"(?i)sunburst66\.pro$"],
             origin: "https://megacloud.blog",
             referer: "https://megacloud.blog/",
             sec_fetch_site: "cross-site",
@@ -150,17 +131,7 @@ static DOMAIN_GROUPS: Lazy<Vec<DomainGroup>> = Lazy::new(|| {
             use_cache_headers: false,
         },
         DomainGroup {
-            patterns: vec![
-                r"(?i)lightningspark77\.pro$",
-                r"(?i)thunderwave48\.xyz$",
-                r"(?i)stormwatch95\.site$",
-                r"(?i)windyrays29\.online$",
-                r"(?i)thunderstrike77\.online$",
-                r"(?i)lightningflash39\.live$",
-                r"(?i)cloudburst82\.xyz$",
-                r"(?i)drizzleshower19\.site$",
-                r"(?i)rainstorm92\.xyz$",
-            ],
+            patterns: vec![r"(?i)lightningspark77\.pro$", r"(?i)thunderwave48\.xyz$", r"(?i)stormwatch95\.site$", r"(?i)windyrays29\.online$", r"(?i)thunderstrike77\.online$", r"(?i)lightningflash39\.live$", r"(?i)cloudburst82\.xyz$", r"(?i)drizzleshower19\.site$", r"(?i)rainstorm92\.xyz$"],
             origin: "https://megacloud.club",
             referer: "https://megacloud.club/",
             sec_fetch_site: "cross-site",
@@ -174,21 +145,14 @@ static DOMAIN_GROUPS: Lazy<Vec<DomainGroup>> = Lazy::new(|| {
             use_cache_headers: false,
         },
         DomainGroup {
-            patterns: vec![
-                r"(?i)nextwaveinitiative\.xyz$",
-                r"(?i)shadowlandschronicles\.com$",
-            ],
+            patterns: vec![r"(?i)nextwaveinitiative\.xyz$", r"(?i)shadowlandschronicles\.com$"],
             origin: "https://edgedeliverynetwork.org",
             referer: "https://edgedeliverynetwork.org/",
             sec_fetch_site: "cross-site",
             use_cache_headers: false,
         },
         DomainGroup {
-            patterns: vec![
-                r"(?i)lightningbolts\.ru$",
-                r"(?i)lightningbolt\.site$",
-                r"(?i)vyebzzqlojvrl\.top$",
-            ],
+            patterns: vec![r"(?i)lightningbolts\.ru$", r"(?i)lightningbolt\.site$", r"(?i)vyebzzqlojvrl\.top$"],
             origin: "https://vidsrc.cc",
             referer: "https://vidsrc.cc/",
             sec_fetch_site: "cross-site",
@@ -209,13 +173,7 @@ static DOMAIN_GROUPS: Lazy<Vec<DomainGroup>> = Lazy::new(|| {
             use_cache_headers: false,
         },
         DomainGroup {
-            patterns: vec![
-                r"(?i)heatwave90\.pro$",
-                r"(?i)humidmist27\.wiki$",
-                r"(?i)frozenbreeze65\.live$",
-                r"(?i)drizzlerain73\.online$",
-                r"(?i)sunrays81\.xyz$",
-            ],
+            patterns: vec![r"(?i)heatwave90\.pro$", r"(?i)humidmist27\.wiki$", r"(?i)frozenbreeze65\.live$", r"(?i)drizzlerain73\.online$", r"(?i)sunrays81\.xyz$"],
             origin: "https://kerolaunochan.live",
             referer: "https://kerolaunochan.live/",
             sec_fetch_site: "cross-site",
@@ -229,11 +187,7 @@ static DOMAIN_GROUPS: Lazy<Vec<DomainGroup>> = Lazy::new(|| {
             use_cache_headers: false,
         },
         DomainGroup {
-            patterns: vec![
-                r"(?i)embed\.su$",
-                r"(?i)usbigcdn\.cc$",
-                r"(?i)\.congacdn\.cc$",
-            ],
+            patterns: vec![r"(?i)embed\.su$", r"(?i)usbigcdn\.cc$", r"(?i)\.congacdn\.cc$"],
             origin: "https://embed.su",
             referer: "https://embed.su/",
             sec_fetch_site: "cross-site",
