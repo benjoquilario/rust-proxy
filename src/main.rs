@@ -381,45 +381,12 @@ async fn m3u8_proxy(req: HttpRequest) -> impl Responder {
         let scrape_url = Url::parse(&target_url).unwrap();
         let headers_param = query.get("headers").cloned();
 
-        // M3U8 line processing - single pass, minimal allocations
-        let lines: Vec<String> = m3u8_text.lines().map(|s| s.to_string()).collect();
-        let mut processed_lines = Vec::with_capacity(lines.len());
+        // Process m3u8 sequentially
+        let lines = m3u8_text.lines();
+        let mut processed_lines = Vec::with_capacity(lines.size_hint().0);
         
-        // Process lines in parallel chunks for maximum speed
-        let chunk_size = std::cmp::max(100, lines.len() / num_cpus::get());
-        
-        if lines.len() > 1000 {
-            // Use parallel processing for large files
-            let processed_chunks = join_all(
-                lines
-                    .chunks(chunk_size)
-                    .map(|chunk| {
-                        let chunk = chunk.to_vec();
-                        let scrape_url = scrape_url.clone();
-                        let headers_param = headers_param.clone();
-                        
-                        task::spawn_blocking(move || {
-                            let mut results = Vec::with_capacity(chunk.len());
-                            for line in chunk {
-                                results.push(process_m3u8_line(&line, &scrape_url, &headers_param));
-                            }
-                            results
-                        })
-                    })
-                    .collect::<Vec<_>>()
-            ).await;
-
-            for chunk_result in processed_chunks {
-                match chunk_result {
-                    Ok(chunk) => processed_lines.extend(chunk),
-                    Err(_) => return HttpResponse::InternalServerError().body("M3U8 processing failed"),
-                }
-            }
-        } else {
-            // Direct processing for small files (faster than spawning tasks)
-            for line in &lines {
-                processed_lines.push(process_m3u8_line(line, &scrape_url, &headers_param));
-            }
+        for line in lines {
+            processed_lines.push(process_m3u8_line(line, &scrape_url, &headers_param));
         }
 
         return HttpResponse::Ok()
