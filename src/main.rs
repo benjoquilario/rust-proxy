@@ -251,6 +251,73 @@ fn process_m3u8_line(
     result
 }
 
+#[inline]
+fn process_webvtt_line(
+    line: &str,
+    scrape_url: &Url,
+    headers_param: &Option<String>,
+) -> String {
+    if line.is_empty() || line.starts_with("WEBVTT") || line.chars().all(|c| c.is_ascii_digit()) {
+        return line.to_string();
+    }
+    
+    // Check if line contains timestamp (WebVTT cue timing)
+    if line.contains(" --> ") {
+        return line.to_string();
+    }
+    
+    // Process sprite image references (e.g., "sprite-0.jpg#xywh=0,0,178,100")
+    if let Some(hash_pos) = line.find('#') {
+        let image_url = &line[..hash_pos];
+        let fragment = &line[hash_pos..];
+        
+        // Check if it looks like an image file
+        if image_url.ends_with(".jpg") || image_url.ends_with(".jpeg") || 
+           image_url.ends_with(".png") || image_url.ends_with(".webp") ||
+           image_url.ends_with(".gif") || image_url.ends_with(".bmp") {
+            
+            let resolved = get_url(image_url, scrape_url);
+            
+            let mut new_q = String::with_capacity(resolved.as_str().len() + 50);
+            new_q.push_str("url=");
+            new_q.push_str(&urlencoding::encode(resolved.as_str()));
+            if let Some(h) = headers_param {
+                new_q.push_str("&headers=");
+                new_q.push_str(h);
+            }
+            
+            let mut result = String::with_capacity(new_q.len() + fragment.len() + 10);
+            result.push_str("/?");
+            result.push_str(&new_q);
+            result.push_str(fragment);
+            return result;
+        }
+    }
+    
+    // Fallback: check if entire line is just an image URL without fragment
+    if line.ends_with(".jpg") || line.ends_with(".jpeg") || 
+       line.ends_with(".png") || line.ends_with(".webp") ||
+       line.ends_with(".gif") || line.ends_with(".bmp") {
+        
+        let resolved = get_url(line, scrape_url);
+        
+        let mut new_q = String::with_capacity(resolved.as_str().len() + 50);
+        new_q.push_str("url=");
+        new_q.push_str(&urlencoding::encode(resolved.as_str()));
+        if let Some(h) = headers_param {
+            new_q.push_str("&headers=");
+            new_q.push_str(h);
+        }
+        
+        let mut result = String::with_capacity(new_q.len() + 10);
+        result.push_str("/?");
+        result.push_str(&new_q);
+        return result;
+    }
+    
+    line.to_string()
+}
+
 // Handle CORS preflight requests
 async fn handle_options(req: HttpRequest) -> impl Responder {
     let origin = match get_valid_origin(&req) {
@@ -372,6 +439,10 @@ async fn m3u8_proxy(req: HttpRequest) -> impl Responder {
         || content_type.contains("application/vnd.apple.mpegurl")
         || content_type.contains("application/x-mpegurl");
 
+    let is_webvtt = target_url.ends_with(".vtt")
+        || content_type.contains("text/vtt")
+        || content_type.contains("text/webvtt");
+
     if is_m3u8 {
         let m3u8_text = match resp.text().await {
             Ok(t) => t,
@@ -398,7 +469,33 @@ async fn m3u8_proxy(req: HttpRequest) -> impl Responder {
             .body(processed_lines.join("\n"));
     }
 
-    // Stream non-m3u8 resources with proper CORS headers
+    if is_webvtt {
+        let webvtt_text = match resp.text().await {
+            Ok(t) => t,
+            Err(_) => return HttpResponse::InternalServerError().body("Failed to read WebVTT"),
+        };
+
+        let scrape_url = Url::parse(&target_url).unwrap();
+        let headers_param = query.get("headers").cloned();
+
+        // Process WebVTT sequentially
+        let lines = webvtt_text.lines();
+        let mut processed_lines = Vec::with_capacity(lines.size_hint().0);
+        
+        for line in lines {
+            processed_lines.push(process_webvtt_line(line, &scrape_url, &headers_param));
+        }
+
+        return HttpResponse::Ok()
+            .insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, origin))
+            .insert_header((header::ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, OPTIONS"))
+            .insert_header((header::ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type, Authorization, Range"))
+            .insert_header((header::ACCESS_CONTROL_EXPOSE_HEADERS, "Content-Length, Content-Range, Accept-Ranges"))
+            .content_type("text/vtt")
+            .body(processed_lines.join("\n"));
+    }
+
+    // Stream non-m3u8/webvtt resources with proper CORS headers
     let mut response_builder = HttpResponse::build(status);
     
     // Set CORS headers for all responses
