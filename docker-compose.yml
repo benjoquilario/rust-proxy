@@ -1,5 +1,5 @@
 services:
-  app:
+  rust-proxy:
     build:
       context: .
       dockerfile: Dockerfile
