@@ -37,9 +37,5 @@ services:
       - "traefik.http.services.rustproxy.loadbalancer.server.port=8082"
 
 networks:
-  # IMPORTANT: In Dokploy, Traefik and your app must be on the same Docker network.
-  # If Dokploy exposes a Traefik network (e.g. "traefik-public" or "proxy"), mark this network as external and set `name:` accordingly.
-  # Replace `traefik-public` below with the actual network name used by Dokploy, or remove `external` if Dokploy manages the network for you.
   proxy-network:
-    external: true
-    name: traefik-public
+    driver: bridge
