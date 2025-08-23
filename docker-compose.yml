@@ -1,6 +1,8 @@
 services:
   rust-proxy:
-    image: ghcr.io/benjoquilario/rustproxy:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: rust-proxy
     restart: unless-stopped
     ports:
