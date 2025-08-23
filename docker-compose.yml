@@ -14,3 +14,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    networks:
+      - default
+      - dokploy-network
+
+networks:
+  dokploy-network:
+    external: true
+    name: dokploy
