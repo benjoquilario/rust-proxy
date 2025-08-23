@@ -5,37 +5,13 @@ services:
       dockerfile: Dockerfile
     container_name: rust-proxy
     restart: unless-stopped
-    # You can remove the published port when Traefik is fronting it.
-    # If you keep it, it's harmless but not required.
-    # ports:
-    #   - '8082:8082'
+    ports:
+      - '8082:8082'
     environment:
       - ENABLE_CORS=false
-      # if your app has a bind env, ensure it binds 0.0.0.0
-      # - LISTEN_ADDR=0.0.0.0:8082
-    networks:
-      - proxy-network
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:8082']
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    labels:
-      - "traefik.enable=true"
-      # HTTPS router (uses Let's Encrypt certresolver named "le")
-      - "traefik.http.routers.rustproxy.rule=Host(`cors.animehi.live`)"
-      - "traefik.http.routers.rustproxy.entrypoints=websecure"
-      - "traefik.http.routers.rustproxy.tls=true"
-      - "traefik.http.routers.rustproxy.tls.certresolver=le"
-      # HTTP router to redirect to HTTPS
-      - "traefik.http.routers.rustproxy-http.rule=Host(`cors.animehi.live`)"
-      - "traefik.http.routers.rustproxy-http.entrypoints=web"
-      - "traefik.http.routers.rustproxy-http.middlewares=redirect-to-https"
-      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
-      # Tell Traefik which port the app listens on inside the container
-      - "traefik.http.services.rustproxy.loadbalancer.server.port=8082"
-
-networks:
-  proxy-network:
-    driver: bridge

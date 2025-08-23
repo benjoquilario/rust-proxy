@@ -18,7 +18,7 @@ mod templates;
 // Allowed origins
 static ALLOWED_ORIGINS: Lazy<[&str; 6]> = Lazy::new(|| [
     "http://localhost:5173",
-    "http://localhost:3000",
+    "http://localhost:3002",
     "http://animehi.live",
     "https://animehi.live",
     "http://localhost:4000",
