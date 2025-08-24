@@ -24,6 +24,13 @@ services:
       - 'traefik.http.services.rust-proxy.loadbalancer.server.port=8082'
       - 'traefik.docker.network=dokploy-network'
 
+      - 'traefik.http.routers.rust-proxy.tls=true'
+      - 'traefik.http.routers.rust-proxy.tls.certresolver=le'
+      - 'traefik.http.routers.rust-proxy-http.rule=Host(`cors.animehi.live`)'
+      - 'traefik.http.routers.rust-proxy-http.entrypoints=web'
+      - 'traefik.http.routers.rust-proxy-http.middlewares=redirect-to-https'
+      - 'traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https'
+
 networks:
   dokploy-network:
     external: true
