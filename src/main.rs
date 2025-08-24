@@ -10,19 +10,16 @@ use reqwest::{
 };
 use std::{collections::HashMap, str::FromStr};
 use url::Url;
-use base64::{engine::general_purpose, Engine as _};
 use tokio::task;
 
 mod templates;
 
-// Allowed origins
-static ALLOWED_ORIGINS: Lazy<[&str; 6]> = Lazy::new(|| [
+// Allowed origins - more permissive for production
+static ALLOWED_ORIGINS: Lazy<[&str; 4]> = Lazy::new(|| [
     "http://localhost:5173",
-    "http://localhost:3002",
+    "http://localhost:3000",
     "http://animehi.live",
     "https://animehi.live",
-    "http://localhost:4000",
-    "http://127.0.0.1:8082"
 ]);
 
 // Reqwest client pool
@@ -41,48 +38,10 @@ static ENABLE_CORS: Lazy<bool> = Lazy::new(|| {
         .unwrap_or(false)
 });
 
-#[inline]
-fn is_likely_url(s: &str) -> bool {
-    s.len() > 7 && (s.starts_with("http://") || s.starts_with("https://"))
-}
-
-#[inline]
-fn is_likely_base64(s: &str) -> bool {
-    s.len() > 4 && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')
-}
-
-fn decode_url(url: &str) -> Result<String, HttpResponse> {
+fn validate_url(url: &str) -> Result<String, HttpResponse> {
     let url = url.trim();
     
-    if is_likely_url(url) {
-        if let Ok(_) = Url::parse(url) {
-            return Ok(url.to_string());
-        }
-    }
-    
-    // Only try Base64 decoding if it looks like Base64
-    if is_likely_base64(url) {
-        // Try Base64 decoding with padding adjustment
-        let padded_url = if url.len() % 4 != 0 {
-            let padding_needed = (4 - (url.len() % 4)) % 4;
-            format!("{}{}", url, "=".repeat(padding_needed))
-        } else {
-            url.to_string()
-        };
-
-        // Try STANDARD_NO_PAD first (most common), then STANDARD
-        for engine in &[general_purpose::STANDARD_NO_PAD, general_purpose::STANDARD] {
-            if let Ok(decoded) = engine.decode(&padded_url) {
-                if let Ok(decoded_str) = String::from_utf8(decoded) {
-                    if Url::parse(&decoded_str).is_ok() {
-                        return Ok(decoded_str);
-                    }
-                }
-            }
-        }
-    }
-
-    // Final fallback: try as normal URL
+    // Just validate it's a proper URL
     if Url::parse(url).is_ok() {
         Ok(url.to_string())
     } else {
@@ -90,15 +49,16 @@ fn decode_url(url: &str) -> Result<String, HttpResponse> {
     }
 }
 
-// Check if request has valid Origin or Referer
+// Check if request has valid Origin or Referer - more permissive
 fn get_valid_origin(req: &HttpRequest) -> Option<String> {
     if !*ENABLE_CORS {
         return Some("*".to_string());
     }
 
+    // Allow all origins in production
     if let Some(origin) = req.headers().get(header::ORIGIN) {
         if let Ok(origin_str) = origin.to_str() {
-            if ALLOWED_ORIGINS.contains(&origin_str) {
+            if ALLOWED_ORIGINS.contains(&origin_str) || ALLOWED_ORIGINS.contains(&"*") {
                 return Some(origin_str.to_string());
             }
         }
@@ -115,7 +75,8 @@ fn get_valid_origin(req: &HttpRequest) -> Option<String> {
         }
     }
 
-    None
+    // Default to allowing all origins in production
+    Some("*".to_string())
 }
 
 fn get_url(line: &str, base: &Url) -> Url {
@@ -252,28 +213,29 @@ fn process_m3u8_line(
     result
 }
 
-// Handle CORS preflight requests
+// Handle CORS preflight requests - more permissive
 async fn handle_options(req: HttpRequest) -> impl Responder {
     let origin = match get_valid_origin(&req) {
         Some(o) => o,
-        None => return HttpResponse::Forbidden().body("Access denied: Origin not allowed"),
+        None => "*".to_string(), // Default to allowing all
     };
 
     HttpResponse::Ok()
         .insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, origin))
-        .insert_header((header::ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, OPTIONS"))
-        .insert_header((header::ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type, Authorization, Range, X-Requested-With"))
-        .insert_header((header::ACCESS_CONTROL_EXPOSE_HEADERS, "Content-Length, Content-Range, Accept-Ranges"))
+        .insert_header((header::ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, OPTIONS, HEAD"))
+        .insert_header((header::ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type, Authorization, Range, X-Requested-With, Origin, Accept, Accept-Encoding, Accept-Language, Cache-Control, Pragma, Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site, Sec-Ch-Ua, Sec-Ch-Ua-Mobile, Sec-Ch-Ua-Platform, Connection"))
+        .insert_header((header::ACCESS_CONTROL_EXPOSE_HEADERS, "Content-Length, Content-Range, Accept-Ranges, Content-Type, Cache-Control, Expires, Vary, ETag, Last-Modified"))
         .insert_header((header::ACCESS_CONTROL_MAX_AGE, "86400"))
+        .insert_header((header::CROSS_ORIGIN_RESOURCE_POLICY, "cross-origin"))
         .finish()
 }
 
 #[get("/")]
 async fn m3u8_proxy(req: HttpRequest) -> impl Responder {
-    // Check and extract valid origin
+    // Check and extract valid origin - more permissive
     let origin = match get_valid_origin(&req) {
         Some(o) => o,
-        None => return HttpResponse::Forbidden().body("Access denied: Origin not allowed"),
+        None => "*".to_string(), // Default to allowing all
     };
 
     // Parallel query parsing
@@ -300,10 +262,10 @@ async fn m3u8_proxy(req: HttpRequest) -> impl Responder {
         Err(_) => return HttpResponse::InternalServerError().body("Query parsing failed"),
     };
 
-    // Get and decode the URL
+    // Get and validate the URL
     let target_url = match query.get("url") {
-        Some(u) => match decode_url(u) {
-            Ok(decoded) => decoded,
+        Some(u) => match validate_url(u) {
+            Ok(validated) => validated,
             Err(resp) => return resp,
         },
         None => return HttpResponse::BadRequest().body("Missing URL"),
@@ -319,9 +281,11 @@ async fn m3u8_proxy(req: HttpRequest) -> impl Responder {
         let target_url_parsed = target_url_parsed.clone();
         let query = query.clone();
         move || {
-            let mut headers = templates::generate_headers_for_url(&target_url_parsed);
+            // Use custom origin if provided, otherwise use template
+            let origin_param = query.get("origin").map(|s| s.as_str());
+            let mut headers = templates::generate_headers_for_url(&target_url_parsed, origin_param);
 
-            // Headers passthrough
+            // Custom headers support
             if let Some(header_json) = query.get("headers") {
                 if let Ok(parsed) = serde_json::from_str::<HashMap<String, String>>(header_json) {
                     for (k, v) in parsed {
@@ -335,12 +299,6 @@ async fn m3u8_proxy(req: HttpRequest) -> impl Responder {
                 }
             }
 
-            if let Some(origin_val) = query.get("origin") {
-                if let Ok(value) = HeaderValue::from_str(origin_val) {
-                    headers.insert("Origin", value);
-                }
-            }
-
             headers
         }
     });
@@ -350,14 +308,27 @@ async fn m3u8_proxy(req: HttpRequest) -> impl Responder {
         Err(_) => return HttpResponse::InternalServerError().body("Header processing failed"),
     };
 
+    // Copy important headers from client request
     if let Some(range) = req.headers().get("Range") {
         headers.insert("Range", range.clone());
+    }
+    if let Some(if_range) = req.headers().get("If-Range") {
+        headers.insert("If-Range", if_range.clone());
+    }
+    if let Some(if_none_match) = req.headers().get("If-None-Match") {
+        headers.insert("If-None-Match", if_none_match.clone());
+    }
+    if let Some(if_modified_since) = req.headers().get("If-Modified-Since") {
+        headers.insert("If-Modified-Since", if_modified_since.clone());
     }
 
     // Fetch target
     let resp = match CLIENT.get(&target_url).headers(headers).send().await {
         Ok(r) => r,
-        Err(_) => return HttpResponse::InternalServerError().body("Failed to fetch target URL"),
+        Err(e) => {
+            eprintln!("Failed to fetch target URL {}: {:?}", target_url, e);
+            return HttpResponse::InternalServerError().body("Failed to fetch target URL");
+        }
     };
 
     let status = resp.status();
@@ -373,11 +344,13 @@ async fn m3u8_proxy(req: HttpRequest) -> impl Responder {
         || content_type.contains("application/vnd.apple.mpegurl")
         || content_type.contains("application/x-mpegurl");
 
-
     if is_m3u8 {
         let m3u8_text = match resp.text().await {
             Ok(t) => t,
-            Err(_) => return HttpResponse::InternalServerError().body("Failed to read m3u8"),
+            Err(e) => {
+                eprintln!("Failed to read m3u8 content: {:?}", e);
+                return HttpResponse::InternalServerError().body("Failed to read m3u8");
+            }
         };
 
         let scrape_url = Url::parse(&target_url).unwrap();
@@ -393,20 +366,23 @@ async fn m3u8_proxy(req: HttpRequest) -> impl Responder {
 
         return HttpResponse::Ok()
             .insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, origin))
-            .insert_header((header::ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, OPTIONS"))
-            .insert_header((header::ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type, Authorization, Range"))
-            .insert_header((header::ACCESS_CONTROL_EXPOSE_HEADERS, "Content-Length, Content-Range, Accept-Ranges"))
+            .insert_header((header::ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, OPTIONS, HEAD"))
+            .insert_header((header::ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type, Authorization, Range, Origin, Accept, Accept-Encoding, Accept-Language, Cache-Control, Pragma, Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site, Sec-Ch-Ua, Sec-Ch-Ua-Mobile, Sec-Ch-Ua-Platform, Connection"))
+            .insert_header((header::ACCESS_CONTROL_EXPOSE_HEADERS, "Content-Length, Content-Range, Accept-Ranges, Content-Type, Cache-Control, Expires, Vary, ETag, Last-Modified"))
+            .insert_header((header::CROSS_ORIGIN_RESOURCE_POLICY, "cross-origin"))
             .content_type("application/vnd.apple.mpegurl")
+            .insert_header((header::CACHE_CONTROL, "no-cache, no-store, must-revalidate"))
             .body(processed_lines.join("\n"));
     }
 
     let mut response_builder = HttpResponse::build(status);
     
-    // Set CORS headers for all responses
+    // Set CORS headers for all responses - more permissive
     response_builder.insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, origin.clone()));
-    response_builder.insert_header((header::ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, OPTIONS"));
-    response_builder.insert_header((header::ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type, Authorization, Range"));
-    response_builder.insert_header((header::ACCESS_CONTROL_EXPOSE_HEADERS, "Content-Length, Content-Range, Accept-Ranges"));
+    response_builder.insert_header((header::ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, OPTIONS, HEAD"));
+    response_builder.insert_header((header::ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type, Authorization, Range, Origin, Accept, Accept-Encoding, Accept-Language, Cache-Control, Pragma, Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site, Sec-Ch-Ua, Sec-Ch-Ua-Mobile, Sec-Ch-Ua-Platform, Connection"));
+    response_builder.insert_header((header::ACCESS_CONTROL_EXPOSE_HEADERS, "Content-Length, Content-Range, Accept-Ranges, Content-Type, Cache-Control, Expires, Vary, ETag, Last-Modified"));
+    response_builder.insert_header((header::CROSS_ORIGIN_RESOURCE_POLICY, "cross-origin"));
     
     // Copy important headers from the original response
     for (name, value) in headers_copy.iter() {
@@ -418,7 +394,9 @@ async fn m3u8_proxy(req: HttpRequest) -> impl Responder {
             || header_name == "cache-control"
             || header_name == "expires"
             || header_name == "last-modified"
-            || header_name == "etag" {
+            || header_name == "etag"
+            || header_name == "content-encoding"
+            || header_name == "vary" {
             response_builder.insert_header((name.clone(), value.clone()));
         }
     }
@@ -436,7 +414,7 @@ async fn m3u8_proxy(req: HttpRequest) -> impl Responder {
 async fn main() -> std::io::Result<()> {
     dotenvy::dotenv().ok();
 
-    println!("We alive bois: http://127.0.0.1:8082");
+    println!("We alive bois: http://127.0.0.1:8080");
     if *ENABLE_CORS {
         println!("Allowed origins: {:?}", *ALLOWED_ORIGINS);
     }
@@ -449,7 +427,7 @@ async fn main() -> std::io::Result<()> {
             .route("/", actix_web::web::method(Method::OPTIONS).to(handle_options))
     })
     .workers(num_cpus::get())
-    .bind("0.0.0.0:8082")?
+    .bind("0.0.0.0:8080")?
     .run()
     .await
 }
