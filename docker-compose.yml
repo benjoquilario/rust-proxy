@@ -15,14 +15,12 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - default
       - dokploy-network
     labels:
       - 'traefik.enable=true'
       - 'traefik.http.routers.rust-proxy.rule=Host(`cors.animehi.live`)'
       - 'traefik.http.routers.rust-proxy.entrypoints=web,websecure'
       - 'traefik.http.services.rust-proxy.loadbalancer.server.port=8082'
-      - 'traefik.docker.network=dokploy-network'
 
       - 'traefik.http.routers.rust-proxy.tls=true'
       - 'traefik.http.routers.rust-proxy.tls.certresolver=le'
@@ -34,4 +32,3 @@ services:
 networks:
   dokploy-network:
     external: true
-    name: dokploy-network
